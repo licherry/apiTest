@@ -4,12 +4,9 @@ import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.http.Headers;
-import io.restassured.matcher.ResponseAwareMatcher;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import org.hamcrest.Matcher;
-import org.hamcrest.Matchers;
 import org.junit.Test;
 import org.w3c.dom.events.EventException;
 
@@ -19,12 +16,8 @@ import java.util.regex.Pattern;
 import static io.restassured.RestAssured.given;
 import static io.restassured.matcher.ResponseAwareMatcherComposer.and;
 import static io.restassured.matcher.RestAssuredMatchers.endsWithPath;
-import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
-import static org.hamcrest.CoreMatchers.*;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.Matchers.*;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItems;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class PracticeResponse {
@@ -140,6 +133,12 @@ public class PracticeResponse {
     //https://github.com/rest-assured/rest-assured/wiki/Usage#use-the-response-to-verify-other-parts-of-the-response
     @Test
     public void testUsePartInResponseByLambda() throws EventException {
+        given()
+        .when()
+                .get("https://www.googleapis.com/books/v1/volumes?q=cucumber&maxResults=2")
+        .then()
+                .log().all()
+                .body("items[0].selfLink", response -> equalTo("https://www.googleapis.com/books/v1/volumes/" + response.path("items[0].id")));
 
     }
 
@@ -149,6 +148,14 @@ public class PracticeResponse {
     //https://github.com/rest-assured/rest-assured/wiki/Usage#use-the-response-to-verify-other-parts-of-the-response
     @Test
     public void testUsePartInResponse() throws EventException {
+        given()
+        .when()
+                .get("https://www.googleapis.com/books/v1/volumes?q=cucumber&maxResults=2")
+        .then()
+                .assertThat()
+                .body("items[0].selfLink", endsWithPath("items[0].id"))
+                .body("items[0].selfLink", and(startsWith("https://www.googleapis.com/"), endsWithPath("items[0].id")));
+
 
     }
 
@@ -158,6 +165,15 @@ public class PracticeResponse {
     // https://github.com/rest-assured/rest-assured/wiki/Usage#json-schema-validation -> Example 3 - Complex parsing and validation
     @Test
     public void testGroovyCollection1() throws EventException {
+        given()
+                .param("q","cucumber")
+                .param("maxResults",10)
+        .when()
+                .get("https://www.googleapis.com/books/v1/volumes")
+        .then()
+                .log().all()
+                .assertThat()
+                .body("items.findAll{it.volumeInfo.pageCount>300}.volumeInfo.title", hasItems("Advances in Sea Cucumber Aquaculture and Management","A Treatise on the Culture of the Cucumber"));
 
     }
 
@@ -166,6 +182,18 @@ public class PracticeResponse {
     // https://github.com/rest-assured/rest-assured/wiki/Usage#json-schema-validation -> Example 3 - Complex parsing and validation
     @Test
     public void testGroovyCollection2() throws EventException {
+        given()
+                .param("filter","paid-ebooks")
+                .param("q","cucumber")
+                .param("maxResults",10)
+        .when()
+                .get("https://www.googleapis.com/books/v1/volumes")
+        .then()
+                .assertThat()
+                .body("items.findAll {it.saleInfo.listPrice.amount > 200}.size()", greaterThanOrEqualTo(2))
+                .body("items.collect {it.saleInfo.retailPrice.amount}.sum()",greaterThanOrEqualTo(800.00))
+                .body("items*.saleInfo.retailPrice.amount.sum()",greaterThanOrEqualTo(800.00))
+                .statusCode(200);
 
     }
 
@@ -175,6 +203,15 @@ public class PracticeResponse {
     // https://github.com/rest-assured/rest-assured/wiki/Usage#json-schema-validation -> Example 3 - Complex parsing and validation
     @Test
     public void testGroovyCollection3() throws EventException {
+        given()
+                .param("filter","paid-ebooks")
+                .param("q","cucumber")
+                .param("maxResults",10)
+        .when()
+                .get("https://www.googleapis.com/books/v1/volumes")
+        .then()
+                .assertThat()
+                .body("items.unique {it.saleInfo.saleability}.size()",lessThanOrEqualTo(2));
 
     }
 
@@ -184,6 +221,29 @@ public class PracticeResponse {
     //https://github.com/rest-assured/rest-assured/wiki/Usage#specification-re-use
     @Test
     public void testSpecification() throws EventException {
+        RequestSpecification requestSpec = new RequestSpecBuilder()
+                .addParam("q", "cucumber")
+                .addParam("maxResult",2)
+                .build();
+
+        ResponseSpecBuilder responseSpecBuilder = new ResponseSpecBuilder();
+        responseSpecBuilder.expectStatusCode(200);
+        responseSpecBuilder.expectResponseTime(lessThan(5000L));
+        responseSpecBuilder.expectBody("kind", equalTo("books#volumes"));
+        ResponseSpecification responseSpec = responseSpecBuilder.build();
+
+       Response response =
+               given()
+                       .spec(requestSpec)
+               .when()
+                       .get("https://www.googleapis.com/books/v1/volumes")
+               .then()
+                        .assertThat()
+                        .spec(responseSpec)
+                        .extract()
+                        .response();
+        assertTrue(Pattern.matches("\\d+", response.path("totalItems").toString()));
+
 
     }
 
