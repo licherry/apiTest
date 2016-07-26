@@ -1,5 +1,6 @@
 package com.restassured.apitest.demo;
 
+import com.restassured.apitest.RequestData;
 import io.restassured.http.ContentType;
 import org.junit.Test;
 import org.w3c.dom.events.EventException;
